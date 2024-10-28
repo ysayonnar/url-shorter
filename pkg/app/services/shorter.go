@@ -1,5 +1,8 @@
 package services
 
-func urlShorter() string {
-	return "hello world"
+import "fmt"
+
+func UrlShorter(initialUrl string) string {
+	s := fmt.Sprintf("URL URL %s", initialUrl)
+	return s
 }
