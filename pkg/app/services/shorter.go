@@ -9,7 +9,6 @@ import (
 )
 
 func UrlShorter(initialUrl string, length int) (string, customErrors.DefaultError) {
-	// отдельную утилиту для проверки существования ссылки и всего того что в handlers.go
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	tokenSymbols := []string{}
 	for i := 0; i < length; i++ {

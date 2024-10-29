@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"url-shorter/pkg/app/database"
 	"url-shorter/pkg/app/handlers"
 )
 
@@ -26,6 +27,15 @@ func main() {
 		log.Fatal("<port> must be from 1000 to 9999.")
 	}
 	
+	db, err := database.ConnectDb()
+	if err != nil{
+		return
+	}
+	err = database.CreateTables(db)
+	if err != nil{
+		return
+	}
+
 	log.Printf("Server started on port %d", port);
-	http.ListenAndServe(fmt.Sprintf(":%d", port), handlers.SetHandlers())
+	http.ListenAndServe(fmt.Sprintf(":%d", port), handlers.SetHandlers(db))
 }

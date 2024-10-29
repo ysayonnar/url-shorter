@@ -1,11 +1,15 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"url-shorter/pkg/app/services"
 	"url-shorter/pkg/app/utils"
 	customErrors "url-shorter/pkg/errors"
+
+	"github.com/gorilla/mux"
 )
 
 type Url struct{
@@ -18,7 +22,7 @@ type UrlShortedResponse struct{
 	ShortedUrl string `json:"shortedUrl"`
 }
 
-func GenerateShortedUrl(w http.ResponseWriter, r *http.Request){
+func GenerateShortedUrl(w http.ResponseWriter, r *http.Request, db *sql.DB){
 	if r.Method != "POST"{
 		err := customErrors.DefaultError{Message: "Method must be POST", StatusCode: http.StatusMethodNotAllowed}
 		customErrors.ThrowDefaultError(w,r,err)
@@ -62,13 +66,18 @@ func GenerateShortedUrl(w http.ResponseWriter, r *http.Request){
 		customErrors.ThrowDefaultError(w,r, err)
 		return
 	}
-	
+	// end of checking url existing
+
 	shortedUrl, err := services.UrlShorter(url.Url, url.Length)
 	if err.Message != ""{
 		customErrors.ThrowDefaultError(w,r, err)
 		return
 	}
-	// end of checking url existing
+
+	queryErr := services.InsertUrl(db, url.Url, shortedUrl)
+	if queryErr != nil{
+		return
+	}
 	
 	response := UrlShortedResponse{
 		InitialUrl: url.Url,
@@ -85,4 +94,36 @@ func GenerateShortedUrl(w http.ResponseWriter, r *http.Request){
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsonResponse)
+}
+
+func Redirect(w http.ResponseWriter, r *http.Request, db *sql.DB){
+	if r.Method != "GET"{
+		err := customErrors.DefaultError{
+			Message: "Method must be GET",
+			StatusCode: http.StatusMethodNotAllowed,
+		}
+		customErrors.ThrowDefaultError(w, r, err)
+		return
+	}
+
+	params := mux.Vars(r)
+	token, isExists := params["token"]
+	if !isExists{
+		err := customErrors.DefaultError{
+			Message: "Token is invalid",
+			StatusCode: http.StatusBadRequest,
+		}
+		customErrors.ThrowDefaultError(w, r, err)
+		return
+	}
+	_, err := strconv.Atoi(token)
+	if err == nil{
+		err := customErrors.DefaultError{
+			Message: "Token cant be a number",
+			StatusCode: http.StatusBadRequest,
+		}
+		customErrors.ThrowDefaultError(w, r, err)
+		return
+	}
+
 }
