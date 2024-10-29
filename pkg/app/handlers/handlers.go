@@ -2,14 +2,15 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"url-shorter/pkg/app/services"
+	"url-shorter/pkg/app/utils"
 	customErrors "url-shorter/pkg/errors"
 )
 
 type Url struct{
 	Url string `json:"url"`
+	Length int `json:"length"`
 }
 
 type UrlShortedResponse struct{
@@ -27,15 +28,47 @@ func GenerateShortedUrl(w http.ResponseWriter, r *http.Request){
 	url := &Url{}
 	parsingErr := json.NewDecoder(r.Body).Decode(url)
 	if parsingErr != nil || len(url.Url) == 0{
-		err := customErrors.DefaultError{Message: "Incorrect body", StatusCode: http.StatusBadRequest}
+		err := customErrors.DefaultError{
+			Message: "Incorrect body", 
+			StatusCode: http.StatusBadRequest,
+		}
+		customErrors.ThrowDefaultError(w,r,err)
+		return
+	}
+	if url.Length < 8 || url.Length > 20{
+		err := customErrors.DefaultError{
+			Message: "Length must be from 8 to 20",
+			StatusCode: http.StatusBadRequest,
+		}
+		customErrors.ThrowDefaultError(w,r,err)	
+		return
+	}
+
+	//1.проверка на то что ссылка не моя
+	//2. проверка создана ли уже ссылка, если да, то просто доставать из базы и кидать обратно
+	//3. проверка на существование ссылки
+	
+	IsUrlExists, err := utils.IsUrlExists(url.Url)
+	if err.Message != ""{
 		customErrors.ThrowDefaultError(w,r,err)
 		return
 	}
 	
-	shortedUrl := services.UrlShorter(url.Url)//тут сделать возможность обработки ошибки типо DefaultError из customErrors
-	//сделать проверку на то чтобы ссылки не было в бд
-	//если ссылка существует то просто ее же и возвращать
-	// сделать проверку на существование ссылки
+	if !IsUrlExists{
+		err := customErrors.DefaultError{
+			Message: "Url does not exits",
+			StatusCode: http.StatusBadRequest,
+		}
+		customErrors.ThrowDefaultError(w,r, err)
+		return
+	}
+	
+	shortedUrl, err := services.UrlShorter(url.Url, url.Length)
+	if err.Message != ""{
+		customErrors.ThrowDefaultError(w,r, err)
+		return
+	}
+	// end of checking url existing
 	
 	response := UrlShortedResponse{
 		InitialUrl: url.Url,
@@ -43,7 +76,12 @@ func GenerateShortedUrl(w http.ResponseWriter, r *http.Request){
 	}
 	jsonResponse, parsingErr := json.Marshal(response)
 	if parsingErr != nil {
-		log.Fatal("Error while parsing", parsingErr)
+		err := customErrors.DefaultError{
+			Message: "Error while parsing response object",
+			StatusCode: http.StatusInternalServerError,
+		}
+		customErrors.ThrowDefaultError(w, r, err)
+		return
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsonResponse)

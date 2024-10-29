@@ -2,6 +2,7 @@ package customErrors
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -9,6 +10,9 @@ import (
 type DefaultError struct{
 	Message string `json:"msg"`
 	StatusCode int `json:"-"`
+}
+func (e *DefaultError) Error() string{
+	return fmt.Sprintf("Code: %v, Message: %s", e.StatusCode, e.Message)
 }
 
 func ThrowDefaultError(w http.ResponseWriter, r *http.Request, e DefaultError){

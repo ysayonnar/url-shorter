@@ -1,8 +1,22 @@
 package services
 
-import "fmt"
+import (
+	"fmt"
+	"math/rand"
+	"strings"
+	"url-shorter/pkg/config"
+	customErrors "url-shorter/pkg/errors"
+)
 
-func UrlShorter(initialUrl string) string {
-	s := fmt.Sprintf("URL URL %s", initialUrl)
-	return s
+func UrlShorter(initialUrl string, length int) (string, customErrors.DefaultError) {
+	// отдельную утилиту для проверки существования ссылки и всего того что в handlers.go
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	tokenSymbols := []string{}
+	for i := 0; i < length; i++ {
+		randIndex := rand.Intn(len(charset))
+		tokenSymbols = append(tokenSymbols, string(charset[randIndex]))
+	}
+
+	url := fmt.Sprintf("https://%v/%s", config.Domen, strings.Join(tokenSymbols, "")) //generating url
+	return url, customErrors.DefaultError{}
 }
