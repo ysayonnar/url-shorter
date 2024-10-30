@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	log.SetFlags(log.Ltime) //leave only the time in the logs
+	// log.SetFlags(log.Ltime) //leave only the time in the logs
 	args := os.Args
 	//checking arguments and port
 	if len(args) != 2{

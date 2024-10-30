@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"url-shorter/pkg/app/services"
@@ -12,15 +13,18 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type Url struct{
+type Body struct{
 	Url string `json:"url"`
 	Length int `json:"length"`
 }
 
-type UrlShortedResponse struct{
-	InitialUrl string `json:"initialUrl"`
-	ShortedUrl string `json:"shortedUrl"`
-}
+const (
+	Reset  = "\033[0m"
+	Red    = "\033[31m"
+	Green  = "\033[32m"
+	Yellow = "\033[33m"
+	Blue   = "\033[34m"
+)
 
 func GenerateShortedUrl(w http.ResponseWriter, r *http.Request, db *sql.DB){
 	if r.Method != "POST"{
@@ -29,9 +33,11 @@ func GenerateShortedUrl(w http.ResponseWriter, r *http.Request, db *sql.DB){
 		return
 	}
 
-	url := &Url{}
-	parsingErr := json.NewDecoder(r.Body).Decode(url)
-	if parsingErr != nil || len(url.Url) == 0{
+	log.Println(Green + "POST URL:" + Reset + r.URL.String())
+
+	body := &Body{}
+	parsingErr := json.NewDecoder(r.Body).Decode(body)
+	if parsingErr != nil || len(body.Url) == 0{
 		err := customErrors.DefaultError{
 			Message: "Incorrect body", 
 			StatusCode: http.StatusBadRequest,
@@ -39,7 +45,7 @@ func GenerateShortedUrl(w http.ResponseWriter, r *http.Request, db *sql.DB){
 		customErrors.ThrowDefaultError(w,r,err)
 		return
 	}
-	if url.Length < 8 || url.Length > 20{
+	if body.Length < 8 || body.Length > 20{
 		err := customErrors.DefaultError{
 			Message: "Length must be from 8 to 20",
 			StatusCode: http.StatusBadRequest,
@@ -52,7 +58,7 @@ func GenerateShortedUrl(w http.ResponseWriter, r *http.Request, db *sql.DB){
 	//2. проверка создана ли уже ссылка, если да, то просто доставать из базы и кидать обратно
 	//3. проверка на существование ссылки
 	
-	IsUrlExists, err := utils.IsUrlExists(url.Url)
+	IsUrlExists, err := utils.IsUrlExists(body.Url)
 	if err.Message != ""{
 		customErrors.ThrowDefaultError(w,r,err)
 		return
@@ -68,32 +74,41 @@ func GenerateShortedUrl(w http.ResponseWriter, r *http.Request, db *sql.DB){
 	}
 	// end of checking url existing
 
-	shortedUrl, err := services.UrlShorter(url.Url, url.Length)
+	urlRecord, checkExistError := services.GetUrlByOldUrl(db, body.Url)
+	if checkExistError != nil{
+		customErrors.ThrowDefaultError(w, r, *checkExistError)
+		return
+	}
+	if urlRecord != nil {
+		response := utils.UrlShortedResponse{
+			InitialUrl: body.Url,
+			ShortedUrl: urlRecord.Newurl,
+		}
+		utils.SendJsonResponse(w, r, response)
+		return
+	}
+
+	shortedUrl, err := services.UrlShorter(body.Url, body.Length)
 	if err.Message != ""{
 		customErrors.ThrowDefaultError(w,r, err)
 		return
 	}
 
-	queryErr := services.InsertUrl(db, url.Url, shortedUrl)
+	queryErr := services.InsertUrl(db, body.Url, shortedUrl)
 	if queryErr != nil{
-		return
-	}
-	
-	response := UrlShortedResponse{
-		InitialUrl: url.Url,
-		ShortedUrl: shortedUrl,
-	}
-	jsonResponse, parsingErr := json.Marshal(response)
-	if parsingErr != nil {
 		err := customErrors.DefaultError{
-			Message: "Error while parsing response object",
+			Message: err.Message,
 			StatusCode: http.StatusInternalServerError,
 		}
 		customErrors.ThrowDefaultError(w, r, err)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-	w.Write(jsonResponse)
+	
+	response := utils.UrlShortedResponse{
+		InitialUrl: body.Url,
+		ShortedUrl: shortedUrl,
+	}
+	utils.SendJsonResponse(w, r, response)
 }
 
 func Redirect(w http.ResponseWriter, r *http.Request, db *sql.DB){
@@ -105,6 +120,8 @@ func Redirect(w http.ResponseWriter, r *http.Request, db *sql.DB){
 		customErrors.ThrowDefaultError(w, r, err)
 		return
 	}
+
+	log.Println(Green + "GET" + Reset + r.URL.String())
 
 	params := mux.Vars(r)
 	token, isExists := params["token"]
