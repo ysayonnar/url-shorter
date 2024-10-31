@@ -22,6 +22,12 @@ type Body struct{
 	Length int `json:"length"`
 }
 
+type ClicksJson struct{
+	OldUrl string `json:"oldurl"`
+	NewUrl string `json:"newurl"`
+	Clicks int `json:"clicks"`
+}
+
 const (
 	Reset  = "\033[0m"
 	Red    = "\033[31m"
@@ -124,6 +130,7 @@ func GenerateShortedUrl(w http.ResponseWriter, r *http.Request, db *sql.DB){
 }
 
 func Redirect(w http.ResponseWriter, r *http.Request, db *sql.DB){
+	//ТУТ СДЕЛАТЬ ДОБАВЛЕНИЕ КЛИКОВ ПРИ ПЕРЕХОДЕ
 	if r.Method != "GET"{
 		err := customErrors.DefaultError{
 			Message: "Method must be GET",
@@ -178,6 +185,84 @@ func Redirect(w http.ResponseWriter, r *http.Request, db *sql.DB){
 		w.Write(htmlFile)
 		return
 	}
+	newClicks := record.Clicks + 1
+	clicksErr := services.IncreaseClicks(db, newClicks, record.Id)
+	if clicksErr != nil{
+		customErrors.ThrowDefaultError(w, r, *clicksErr)
+		return
+	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	http.Redirect(w,r, record.Oldurl, http.StatusFound)
+}
+
+func GetClicks(w http.ResponseWriter, r *http.Request, db *sql.DB){
+	if r.Method != "GET"{
+		err := customErrors.DefaultError{
+			Message: "Method must be GET",
+			StatusCode: http.StatusMethodNotAllowed,
+		}
+		customErrors.ThrowDefaultError(w, r, err)
+		return
+	}
+
+	log.Println(Green + "GET" + Reset + r.URL.String())
+
+	params := mux.Vars(r)
+	token, isExists := params["token"]
+	if !isExists{
+		err := customErrors.DefaultError{
+			Message: "Token is invalid",
+			StatusCode: http.StatusBadRequest,
+		}
+		customErrors.ThrowDefaultError(w, r, err)
+		return
+	}
+	_, err := strconv.Atoi(token)
+	if err == nil{
+		err := customErrors.DefaultError{
+			Message: "Token cant be a number",
+			StatusCode: http.StatusBadRequest,
+		}
+		customErrors.ThrowDefaultError(w, r, err)
+		return
+	}
+
+	newUrl := fmt.Sprintf("https://%v/%s", config.Domen, token) //generating url
+
+	record, queryError := services.GetUrlByNewUrl(db, newUrl)
+	if queryError != nil {
+		customErrors.ThrowDefaultError(w, r, *queryError)
+		return
+	}
+	if record == nil{
+		//getting current working directory
+		cwd, _ := os.Getwd()
+		cwd = filepath.Clean(cwd)
+		path := filepath.Join(cwd, "../pkg/htmlPages/index.html")
+
+		htmlFile, err := os.ReadFile(path)
+		if err != nil{
+			log.Println("Error while getting html")
+			log.Fatal(err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		w.Write(htmlFile)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	clicksJson := ClicksJson{
+		Clicks: record.Clicks,
+		OldUrl: record.Oldurl,
+		NewUrl: record.Newurl,
+	}
+	jsonData, err := json.Marshal(clicksJson)
+	if err != nil{
+		customErrors.ThrowDefaultError(w, r, customErrors.DefaultError{
+			Message: "Error whileparsing json",
+			StatusCode: http.StatusInternalServerError,
+		})
+		return
+	}
+	w.Write(jsonData)
 }

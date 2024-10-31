@@ -13,6 +13,9 @@ func SetHandlers(db *sql.DB) *mux.Router {
 	router.HandleFunc("/api/v1/short", func(w http.ResponseWriter, r *http.Request) {
 		GenerateShortedUrl(w, r, db)
 	})
+	router.HandleFunc("/{token}/stats", func(w http.ResponseWriter, r *http.Request) {
+		GetClicks(w, r, db)
+	})
 	router.HandleFunc("/{token}", func(w http.ResponseWriter, r *http.Request) {
 		Redirect(w,r,db)
 	})

@@ -54,3 +54,16 @@ func GetUrlByNewUrl(db *sql.DB, newUrl string) (*UrlRecord, *customErrors.Defaul
 	}
 	return &urlRecord, nil
 }
+
+func IncreaseClicks(db *sql.DB, clicks int, id int) *customErrors.DefaultError{
+	query := `UPDATE urls SET clicks = $1 WHERE id = $2`
+	_, err := db.Exec(query, clicks, id)
+	if err != nil{
+		log.Println("Error while updating the data!")
+		return  &customErrors.DefaultError{
+			Message: "Error while updating the data",
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+	return nil
+}
