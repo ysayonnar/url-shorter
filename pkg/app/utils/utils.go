@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"time"
+	"url-shorter/pkg/config"
 	customErrors "url-shorter/pkg/errors"
 )
 
@@ -44,4 +46,8 @@ func SendJsonResponse(w http.ResponseWriter, r *http.Request, response  UrlShort
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsonResponse)
+}
+
+func CheckIsUrlShorted(url string) bool{
+	return strings.Contains(url, config.Domen)
 }

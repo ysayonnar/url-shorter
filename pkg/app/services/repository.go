@@ -40,3 +40,17 @@ func GetUrlByOldUrl(db *sql.DB, oldUrl string) (*UrlRecord, *customErrors.Defaul
 	}
 	return &urlRecord, nil
 }
+
+func GetUrlByNewUrl(db *sql.DB, newUrl string) (*UrlRecord, *customErrors.DefaultError){
+	query := "SELECT * FROM urls WHERE newurl = $1"
+	var urlRecord UrlRecord
+	err := db.QueryRow(query, newUrl).Scan(&urlRecord.Id, &urlRecord.Oldurl, &urlRecord.Newurl, &urlRecord.Clicks)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil{
+		log.Println("Error while connecting to database")
+		return nil, &customErrors.DefaultError{Message: "Error while connecting to database", StatusCode: http.StatusInternalServerError}
+	}
+	return &urlRecord, nil
+}

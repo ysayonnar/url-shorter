@@ -3,11 +3,13 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"url-shorter/pkg/app/services"
 	"url-shorter/pkg/app/utils"
+	"url-shorter/pkg/config"
 	customErrors "url-shorter/pkg/errors"
 
 	"github.com/gorilla/mux"
@@ -54,9 +56,14 @@ func GenerateShortedUrl(w http.ResponseWriter, r *http.Request, db *sql.DB){
 		return
 	}
 
-	//1.проверка на то что ссылка не моя
-	//2. проверка создана ли уже ссылка, если да, то просто доставать из базы и кидать обратно
-	//3. проверка на существование ссылки
+	if utils.CheckIsUrlShorted(body.Url){
+		err := customErrors.DefaultError{
+			Message: "Url is already shorted and cant be shorted again",
+			StatusCode: http.StatusBadRequest,
+		}
+		customErrors.ThrowDefaultError(w,r,err)
+		return
+	}
 	
 	IsUrlExists, err := utils.IsUrlExists(body.Url)
 	if err.Message != ""{
@@ -74,6 +81,8 @@ func GenerateShortedUrl(w http.ResponseWriter, r *http.Request, db *sql.DB){
 	}
 	// end of checking url existing
 
+
+	//check is created already
 	urlRecord, checkExistError := services.GetUrlByOldUrl(db, body.Url)
 	if checkExistError != nil{
 		customErrors.ThrowDefaultError(w, r, *checkExistError)
@@ -88,6 +97,7 @@ func GenerateShortedUrl(w http.ResponseWriter, r *http.Request, db *sql.DB){
 		return
 	}
 
+	//genearting token url
 	shortedUrl, err := services.UrlShorter(body.Url, body.Length)
 	if err.Message != ""{
 		customErrors.ThrowDefaultError(w,r, err)
@@ -143,4 +153,21 @@ func Redirect(w http.ResponseWriter, r *http.Request, db *sql.DB){
 		return
 	}
 
+
+	newUrl := fmt.Sprintf("https://%v/%s", config.Domen, token) //generating url
+
+	record, queryError := services.GetUrlByNewUrl(db, newUrl)
+	if queryError != nil {
+		customErrors.ThrowDefaultError(w, r, *queryError)
+		return
+	}
+	if record == nil{
+		customErrors.ThrowDefaultError(w, r, customErrors.DefaultError{
+			Message: "Not Found",
+			StatusCode: http.StatusNotFound,
+		})
+		return
+	}
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	http.Redirect(w,r, record.Oldurl, http.StatusFound)
 }
