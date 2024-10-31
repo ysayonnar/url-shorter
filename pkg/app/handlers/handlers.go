@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"url-shorter/pkg/app/services"
 	"url-shorter/pkg/app/utils"
@@ -153,7 +155,6 @@ func Redirect(w http.ResponseWriter, r *http.Request, db *sql.DB){
 		return
 	}
 
-
 	newUrl := fmt.Sprintf("https://%v/%s", config.Domen, token) //generating url
 
 	record, queryError := services.GetUrlByNewUrl(db, newUrl)
@@ -162,10 +163,19 @@ func Redirect(w http.ResponseWriter, r *http.Request, db *sql.DB){
 		return
 	}
 	if record == nil{
-		customErrors.ThrowDefaultError(w, r, customErrors.DefaultError{
-			Message: "Not Found",
-			StatusCode: http.StatusNotFound,
-		})
+		//getting current working directory
+		cwd, _ := os.Getwd()
+		cwd = filepath.Clean(cwd)
+		path := filepath.Join(cwd, "../pkg/htmlPages/index.html")
+
+		htmlFile, err := os.ReadFile(path)
+		if err != nil{
+			log.Println("Error while getting html")
+			log.Fatal(err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		w.Write(htmlFile)
 		return
 	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
